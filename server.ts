@@ -6,6 +6,7 @@ import cors from "cors";
 import path from "path";
 import { extractFirstColumnFromFile } from "./utils/excel";
 import { cleanUploads } from "./utils/cleanUploads";
+import { logFailedNumbers } from "./utils/logFailedNumbers";
 
 const app = express();
 
@@ -47,6 +48,10 @@ function formatLebaneseNumber(number: string | number): string {
   return `${number}@c.us`;
 }
 
+function unformatNumbers(number: string): string {
+  return number.substring(0, number.length - 5);
+}
+
 // Generate QR code for authentication
 client.on("qr", (qr) => {
   qrcode.generate(qr, { small: true });
@@ -74,7 +79,7 @@ app.post(
       const message = req.body.message;
       const startRow = Number(req.body.startRow);
       const endRow = Number(req.body.startRow);
-
+      const failedNumbers: string[] = [];
       if (!excelFile || !message) {
         return res
           .status(400)
@@ -107,7 +112,12 @@ app.post(
           console.log(`Message sent to ${number}`);
         } catch (error) {
           console.error(`Failed to send message to ${number}:`, error);
+          failedNumbers.push(unformatNumbers(number));
         }
+      }
+
+      if (failedNumbers.length > 0) {
+        logFailedNumbers(failedNumbers);
       }
 
       res.status(200).json({ message: "Messages sent successfully" });
