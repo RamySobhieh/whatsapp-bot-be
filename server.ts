@@ -5,6 +5,7 @@ import qrcode from "qrcode-terminal";
 import cors from "cors";
 import path from "path";
 import fs from "fs";
+import { extractFirstColumnFromFile } from "./utils/excel";
 
 const app = express();
 
@@ -117,20 +118,9 @@ app.post(
           .json({ error: "Excel file and message are required" });
       }
 
-      //   const workbook = XLSX.readFile(excelFile.path);
-      //   const sheetName = workbook.SheetNames[0];
-      //   const worksheet = workbook.Sheets[sheetName];
-      //   const phoneNumbers = XLSX.utils
-      //     .sheet_to_json(worksheet, { header: 1 })
-      //     .flat()
-      //     .filter(Boolean)
-      //     .map(String);
+      var numbersList = await extractFirstColumnFromFile(excelFile);
 
-      //   const formattedNumbers = phoneNumbers.map(formatLebaneseNumber);
-
-      const formattedNumbers = ["70616764", "70308205"].map(
-        formatLebaneseNumber
-      );
+      const formattedNumbers = numbersList.map(formatLebaneseNumber);
 
       for (const number of formattedNumbers) {
         try {
