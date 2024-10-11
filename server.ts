@@ -4,8 +4,8 @@ import { Client, LocalAuth, MessageMedia } from "whatsapp-web.js";
 import qrcode from "qrcode-terminal";
 import cors from "cors";
 import path from "path";
-import fs from "fs";
 import { extractFirstColumnFromFile } from "./utils/excel";
+import { cleanUploads } from "./utils/cleanUploads";
 
 const app = express();
 
@@ -33,38 +33,6 @@ const storage = multer.diskStorage({
 // Set up multer for file uploads
 const upload = multer({ storage: storage });
 
-// Cleanup function to delete all files in the upload directory
-const cleanUploads = () => {
-  fs.readdir(uploadDir, (err, files) => {
-    if (err) throw err;
-
-    for (const file of files) {
-      fs.unlink(path.join(uploadDir, file), (err) => {
-        if (err) throw err;
-        console.log(`Deleted ${file} from ${uploadDir}`);
-      });
-    }
-  });
-};
-
-// Handle process exit and call the cleanup function
-process.on("SIGINT", () => {
-  console.log("SIGINT received, cleaning up uploads...");
-  cleanUploads();
-  process.exit();
-});
-
-process.on("SIGTERM", () => {
-  console.log("SIGTERM received, cleaning up uploads...");
-  cleanUploads();
-  process.exit();
-});
-
-process.on("exit", () => {
-  console.log("Process exiting, cleaning up uploads...");
-  cleanUploads();
-});
-
 // Initialize the WhatsApp client
 const client = new Client({
   authStrategy: new LocalAuth(),
@@ -75,15 +43,8 @@ const client = new Client({
 });
 
 // Function to format Lebanese phone numbers
-function formatLebaneseNumber(number: string): string {
-  const cleanNumber = number.replace(/\D/g, "");
-  if (cleanNumber.startsWith("961")) {
-    return `961${cleanNumber.slice(3)}@c.us`;
-  }
-  const numberWithoutLeadingZero = cleanNumber.startsWith("0")
-    ? cleanNumber.slice(1)
-    : cleanNumber;
-  return `961${numberWithoutLeadingZero}@c.us`;
+function formatLebaneseNumber(number: string | number): string {
+  return `${number}@c.us`;
 }
 
 // Generate QR code for authentication
@@ -111,6 +72,8 @@ app.post(
       const excelFile = req.files["excel"][0];
       const images = req.files["images"];
       const message = req.body.message;
+      const startRow = Number(req.body.startRow);
+      const endRow = Number(req.body.startRow);
 
       if (!excelFile || !message) {
         return res
@@ -118,13 +81,21 @@ app.post(
           .json({ error: "Excel file and message are required" });
       }
 
-      var numbersList = await extractFirstColumnFromFile(excelFile);
+      const numbersList = await extractFirstColumnFromFile(
+        excelFile,
+        startRow,
+        endRow
+      );
 
-      const formattedNumbers = numbersList.map(formatLebaneseNumber);
+      const formattedNumbers = numbersList.map((number: string | number) => {
+        return formatLebaneseNumber(number);
+      });
+      console.log("Numbers List");
+      console.log(formattedNumbers);
 
       for (const number of formattedNumbers) {
         try {
-          await client.sendMessage(number, message);
+          await client.sendMessage(number.toString(), message);
 
           if (images && images.length > 0) {
             for (const image of images) {
@@ -148,6 +119,11 @@ app.post(
     }
   }
 );
+
+app.on("close", () => {
+  console.log("Server closing, cleaning up uploads...");
+  cleanUploads();
+});
 
 app.listen(port, () => {
   console.log(`Server is running on port ${port}`);

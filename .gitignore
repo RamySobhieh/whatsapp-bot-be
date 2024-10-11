@@ -13,6 +13,8 @@
 /.next/
 /out/
 
+/.wwebjs_*
+
 # production
 /build
 
